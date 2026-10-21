@@ -1,5 +1,17 @@
-
 import { useState, useEffect } from "react";
+import {
+  Scale,
+  LayoutDashboard,
+  Search,
+  Files,
+  FileText,
+  Sparkles,
+  Upload,
+  RefreshCw,
+  ArrowUpRight,
+  ShieldCheck,
+  MessageSquareText,
+} from "lucide-react";
 import "./App.css";
 
 const API_URL = "http://localhost:5000/api";
@@ -489,11 +501,11 @@ function App() {
   // NAVIGATION
   // ==========================================
   const navItems = [
-    { id: "dashboard", label: "Dashboard", icon: "⌂" },
-    { id: "research", label: "Legal Research", icon: "⌕" },
-    { id: "documents", label: "Documents", icon: "▤" },
-    { id: "cases", label: "Case Briefs", icon: "▧" },
-  ];
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "research", label: "Legal Research", icon: Search },
+  { id: "documents", label: "Documents", icon: Files },
+  { id: "cases", label: "Case Briefs", icon: FileText },
+];
 
   const openResearch = () => {
     setPage("research");
@@ -521,7 +533,12 @@ function App() {
   return (
     <div className="app">
       <aside className="sidebar">
-        <h2>⚖ LegalGenie</h2>
+        <h2 className="brand">
+          <span className="brand-icon">
+            <Scale size={21} />
+          </span>
+          LegalGenie
+        </h2>
         <p className="tagline">AI Legal Research Assistant</p>
 
         <nav>
@@ -534,8 +551,10 @@ function App() {
                 setMessage("");
               }}
             >
-              <span>{item.icon}</span>
-              {item.label}
+              <span className="nav-icon">
+                  <item.icon size={19} strokeWidth={1.8} />
+                </span>
+                <span>{item.label}</span>
             </button>
           ))}
         </nav>

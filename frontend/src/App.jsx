@@ -11,6 +11,7 @@ import {
   ArrowUpRight,
   ShieldCheck,
   MessageSquareText,
+  History,
 } from "lucide-react";
 import "./App.css";
 
@@ -25,7 +26,7 @@ function App() {
   const [answer, setAnswer] = useState("");
   const [researching, setResearching] = useState(false);
   const [usedDocuments, setUsedDocuments] = useState([]);
-
+  const [sourcePages, setSourcePages] = useState([]);
   const [selectedDocument, setSelectedDocument] = useState("");
   const [caseBrief, setCaseBrief] = useState("");
   const [generatingBrief, setGeneratingBrief] = useState(false);
@@ -36,10 +37,13 @@ function App() {
   const [loadingBriefs, setLoadingBriefs] = useState(false);
   const [deletingBriefId, setDeletingBriefId] = useState("");
   const [briefSearch, setBriefSearch] = useState("");
+
   const [researchHistory, setResearchHistory] = useState([]);
-  // ==========================================
+  const [savedResearchChats, setSavedResearchChats] = useState([]);
+  const [selectedResearchChatId, setSelectedResearchChatId] = useState("");
+  const [loadingResearchHistory, setLoadingResearchHistory] = useState(false);
+  
   // LOAD DOCUMENTS
-  // ==========================================
   const loadDocuments = async () => {
     try {
       const response = await fetch(`${API_URL}/documents`);
@@ -64,9 +68,112 @@ function App() {
     }
   };
 
-  // ==========================================
+  // LOAD RESEARCH HISTORY
+  const loadResearchHistory = async () => {
+    setLoadingResearchHistory(true);
+
+    try {
+      const response = await fetch(`${API_URL}/research/history`);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message || "Failed to load research history."
+        );
+      }
+
+      setSavedResearchChats(result.histories || []);
+    } catch (error) {
+      console.error("Load research history error:", error);
+    } finally {
+      setLoadingResearchHistory(false);
+    }
+  };
+
+  // SAVE OR UPDATE RESEARCH CONVERSATION
+  const saveResearchConversation = async (
+    messages,
+    documentId,
+    chatId
+  ) => {
+    try {
+      const selectedDoc = documents.find(
+        (doc) => String(doc._id || doc.id) === String(documentId)
+      );
+
+      const payload = {
+        title:
+          messages.find((item) => item.role === "user")?.text?.slice(0, 80) ||
+          "New Research Chat",
+        documentId: documentId || null,
+        documentName: selectedDoc?.originalName || selectedDoc?.name || "",
+        messages,
+      };
+
+      const isUpdating = Boolean(chatId);
+
+      const response = await fetch(
+        isUpdating
+          ? `${API_URL}/research/history/${chatId}`
+          : `${API_URL}/research/history`,
+        {
+          method: isUpdating ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message || "Could not save conversation."
+        );
+      }
+
+      setSelectedResearchChatId(result.history._id);
+      await loadResearchHistory();
+    } catch (error) {
+      console.error("Save research conversation error:", error);
+      setMessage(
+        "Answer generated, but conversation could not be saved."
+      );
+    }
+  };
+
+  // OPEN SAVED RESEARCH CHAT
+  const handleOpenResearchChat = async (chatId) => {
+    try {
+      const response = await fetch(
+        `${API_URL}/research/history/${chatId}`
+      );
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message || "Failed to open saved chat."
+        );
+      }
+
+      const chat = result.history;
+
+      setSelectedResearchChatId(chat._id);
+      setSelectedDocument(chat.documentId || "");
+      setResearchHistory(chat.messages || []);
+      setAnswer("");
+      setQuestion("");
+      setUsedDocuments(
+        chat.documentName ? [chat.documentName] : []
+      );
+      setMessage("Saved conversation opened.");
+      setPage("research");
+    } catch (error) {
+      console.error("Open research history error:", error);
+      setMessage("Could not open saved conversation.");
+    }
+  };
+
   // LOAD SAVED CASE BRIEFS
-  // ==========================================
   const loadSavedCaseBriefs = async () => {
     setLoadingBriefs(true);
 
@@ -94,11 +201,10 @@ function App() {
   useEffect(() => {
     loadDocuments();
     loadSavedCaseBriefs();
+    loadResearchHistory();
   }, []);
 
-  // ==========================================
   // UPLOAD PDF DOCUMENTS
-  // ==========================================
   const handleUpload = async (event) => {
     const files = Array.from(event.target.files || []);
     event.target.value = "";
@@ -137,10 +243,13 @@ function App() {
         formData.append("document", file);
 
         try {
-          const response = await fetch(`${API_URL}/documents/upload`, {
-            method: "POST",
-            body: formData,
-          });
+          const response = await fetch(
+            `${API_URL}/documents/upload`,
+            {
+              method: "POST",
+              body: formData,
+            }
+          );
 
           const result = await response.json();
 
@@ -157,7 +266,9 @@ function App() {
       await loadDocuments();
 
       if (errors.length === 0) {
-        setMessage(`${successCount} PDF file(s) uploaded successfully!`);
+        setMessage(
+          `${successCount} PDF file(s) uploaded successfully!`
+        );
       } else {
         setMessage(
           `${successCount} uploaded successfully. Failed: ${errors.join(" | ")}`
@@ -168,11 +279,7 @@ function App() {
     }
   };
 
-  // This removes a document from the visible list only.
-  // It does not delete the document from MongoDB.
-    // ==========================================
-  // DELETE DOCUMENT FROM MONGODB AND BACKEND
-  // ==========================================
+  // DELETE DOCUMENT FROM BACKEND AND MONGODB
   const removeDocument = async (id) => {
     const confirmed = window.confirm(
       "Are you sure you want to permanently delete this PDF from the database?"
@@ -206,7 +313,6 @@ function App() {
       }
 
       setMessage("PDF deleted successfully from the database!");
-
       await loadDocuments();
     } catch (error) {
       console.error("Delete document error:", error);
@@ -214,10 +320,7 @@ function App() {
     }
   };
 
-  // ==========================================
   // AI LEGAL RESEARCH
-  // ==========================================
- 
   const handleResearch = async () => {
     if (!question.trim()) {
       setMessage("Please enter a legal research question first.");
@@ -236,27 +339,23 @@ function App() {
     setMessage("");
     setQuestion("");
 
-    // Show the user's question immediately
-    setResearchHistory((prev) => [
-      ...prev,
+    setResearchHistory([
+      ...previousHistory,
       { role: "user", text: currentQuestion },
     ]);
 
     try {
-      const response = await fetch(
-        "http://localhost:5000/api/research",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            question: currentQuestion,
-            documentId: selectedDocument,
-            history: previousHistory.slice(-10),
-          }),
-        }
-      );
+      const response = await fetch(`${API_URL}/research`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          question: currentQuestion,
+          documentId: selectedDocument,
+          history: previousHistory.slice(-10),
+        }),
+      });
 
       const result = await response.json();
 
@@ -269,33 +368,35 @@ function App() {
       const generatedAnswer =
         result.answer || "No answer was returned.";
 
+      // STEP 2: SAVE THE QUESTION AND ANSWER TO RESEARCH HISTORY
+      const updatedMessages = [
+        ...previousHistory,
+        { role: "user", text: currentQuestion },
+        { role: "model", text: generatedAnswer },
+      ];
+
       setAnswer(generatedAnswer);
       setUsedDocuments(result.usedDocuments || []);
-
-      setResearchHistory((prev) => [
-        ...prev,
-        { role: "model", text: generatedAnswer },
-      ]);
-
+      setResearchHistory(updatedMessages);
+      setSourcePages(result.sourcePages || []);
       setMessage("Answer generated using your selected PDF.");
+
+      await saveResearchConversation(
+        updatedMessages,
+        selectedDocument,
+        selectedResearchChatId
+      );
     } catch (error) {
       console.error("Legal research error:", error);
-
       setMessage(`Research failed: ${error.message}`);
 
-      // Keep the question visible, but remove it from history
-      // so a failed request is not sent as a previous conversation.
       setResearchHistory((prev) => prev.slice(0, -1));
       setQuestion(currentQuestion);
     } finally {
       setResearching(false);
     }
   };
-
-
-  // ==========================================
-  // AI CASE BRIEF GENERATOR
-  // ==========================================
+    // AI CASE BRIEF GENERATOR
   const handleGenerateBrief = async () => {
     if (!selectedDocument) {
       setMessage("Please select a PDF document first.");
@@ -336,16 +437,13 @@ function App() {
     }
   };
 
-  // ==========================================
   // SAVE CASE BRIEF TO MONGODB
-  // ==========================================
   const handleSaveCaseBrief = async () => {
     if (!caseBrief.trim()) {
       setMessage("Please generate a case brief first.");
       return;
     }
 
-    // Avoid saving the same currently opened brief again.
     if (
       selectedSavedBrief &&
       selectedSavedBrief.brief === caseBrief
@@ -398,9 +496,7 @@ function App() {
     }
   };
 
-  // ==========================================
   // OPEN A SAVED CASE BRIEF
-  // ==========================================
   const handleOpenSavedBrief = async (id) => {
     setMessage("");
 
@@ -427,9 +523,7 @@ function App() {
     }
   };
 
-  // ==========================================
   // DELETE A SAVED CASE BRIEF
-  // ==========================================
   const handleDeleteSavedBrief = async (id) => {
     const confirmed = window.confirm(
       "Are you sure you want to delete this saved case brief?"
@@ -471,9 +565,7 @@ function App() {
     }
   };
 
-  // ==========================================
   // DOWNLOAD CASE BRIEF
-  // ==========================================
   const downloadCaseBrief = () => {
     if (!caseBrief.trim()) {
       setMessage("There is no case brief to download.");
@@ -497,15 +589,14 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
-  // ==========================================
   // NAVIGATION
-  // ==========================================
   const navItems = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "research", label: "Legal Research", icon: Search },
-  { id: "documents", label: "Documents", icon: Files },
-  { id: "cases", label: "Case Briefs", icon: FileText },
-];
+    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { id: "research", label: "Legal Research", icon: Search },
+    { id: "documents", label: "Documents", icon: Files },
+    { id: "cases", label: "Case Briefs", icon: FileText },
+    { id: "history", label: "Research History", icon: History },
+  ];
 
   const openResearch = () => {
     setPage("research");
@@ -527,9 +618,7 @@ function App() {
       .includes(briefSearch.toLowerCase().trim())
   );
 
-  // ==========================================
   // USER INTERFACE
-  // ==========================================
   return (
     <div className="app">
       <aside className="sidebar">
@@ -539,6 +628,7 @@ function App() {
           </span>
           LegalGenie
         </h2>
+
         <p className="tagline">AI Legal Research Assistant</p>
 
         <nav>
@@ -552,9 +642,9 @@ function App() {
               }}
             >
               <span className="nav-icon">
-                  <item.icon size={19} strokeWidth={1.8} />
-                </span>
-                <span>{item.label}</span>
+                <item.icon size={19} strokeWidth={1.8} />
+              </span>
+              <span>{item.label}</span>
             </button>
           ))}
         </nav>
@@ -573,14 +663,68 @@ function App() {
               {page === "research" && "Legal Research"}
               {page === "documents" && "Legal Documents"}
               {page === "cases" && "Case Briefs"}
+              {page === "history" && "Research History"}
             </h1>
+
             <p>Your AI-powered legal research workspace</p>
           </div>
 
           <span className="status">AI Assistant</span>
         </header>
 
-        {/* DASHBOARD */}
+        {/* RESEARCH HISTORY */}
+        {page === "history" && (
+          <section className="page-panel">
+            <div className="page-heading">
+              <div>
+                <h2>Research History</h2>
+                <p>
+                  View your previously saved legal research conversations.
+                </p>
+              </div>
+
+              <button
+                className="secondary-button"
+                onClick={loadResearchHistory}
+                disabled={loadingResearchHistory}
+              >
+                {loadingResearchHistory ? "Loading..." : "Refresh"}
+              </button>
+            </div>
+
+            {loadingResearchHistory ? (
+              <p>Loading saved conversations...</p>
+            ) : savedResearchChats.length === 0 ? (
+              <p className="empty-state">
+                No saved research conversations yet.
+              </p>
+            ) : (
+              <div className="document-list">
+                {savedResearchChats.map((chat) => (
+                  <div className="document-row" key={chat._id}>
+                    <div className="document-info">
+                      <h3>{chat.title}</h3>
+                      <p>{chat.documentName || "No document name"}</p>
+                      <small>
+                        {chat.updatedAt
+                          ? new Date(chat.updatedAt).toLocaleString()
+                          : ""}
+                      </small>
+                    </div>
+
+                    <button
+                      className="secondary-button"
+                      onClick={() => handleOpenResearchChat(chat._id)}
+                    >
+                      Open
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+                {/* DASHBOARD */}
         {page === "dashboard" && (
           <>
             <section className="hero">
@@ -669,7 +813,9 @@ function App() {
             <div className="upload-area">
               <span>📄</span>
               <h3>Upload legal documents</h3>
-              <p>Select one or more PDF judgments from your computer.</p>
+              <p>
+                Select one or more PDF judgments from your computer.
+              </p>
               <p className="muted">
                 PDFs are saved to the backend, with document details stored
                 in MongoDB.
@@ -712,7 +858,9 @@ function App() {
 
                     <div className="document-info">
                       <strong>{document.name}</strong>
-                      <small>{document.size} KB · Saved document</small>
+                      <small>
+                        {document.size} KB · Saved document
+                      </small>
                     </div>
 
                     <button
@@ -729,140 +877,184 @@ function App() {
           </section>
         )}
 
-       
-  {/* Legal Research */}
-  {page === "research" && (
-    <section className="page-panel">
-      <h2>Chat with Your Legal PDF</h2>
+        {/* LEGAL RESEARCH */}
+        {page === "research" && (
+          <section className="page-panel">
+            <h2>Chat with Your Legal PDF</h2>
 
-      <p>
-        Select a legal document and ask questions about its contents.
-        You can also ask follow-up questions.
-      </p>
+            <p>
+              Select a legal document and ask questions about its contents.
+              You can also ask follow-up questions.
+            </p>
 
-      <label htmlFor="research-document">
-        Select PDF document
-      </label>
+            <label htmlFor="research-document">
+              Select PDF document
+            </label>
 
-      <select
-        id="research-document"
-        value={selectedDocument}
-        onChange={(event) => {
-          setSelectedDocument(event.target.value);
-          setResearchHistory([]);
-          setAnswer("");
-          setUsedDocuments([]);
-          setMessage("");
-        }}
-        disabled={researching}
-      >
-        <option value="">-- Choose a PDF --</option>
-
-        {documents.map((document) => (
-          <option key={document.id} value={document.id}>
-            {document.name}
-          </option>
-        ))}
-      </select>
-
-      {documents.length === 0 && (
-        <p className="muted">
-          Upload a PDF in the Documents page before starting research.
-        </p>
-      )}
-
-      <div className="research-answer">
-        <h3>💬 Conversation</h3>
-
-        {researchHistory.length === 0 ? (
-          <p className="muted">
-            Your questions and answers will appear here.
-          </p>
-        ) : (
-          researchHistory.map((item, index) => (
-            <div
-              key={`${index}-${item.role}`}
-              style={{
-                marginBottom: "16px",
-                padding: "12px",
-                borderRadius: "8px",
-                background:
-                  item.role === "user" ? "#eef2ff" : "#f3f4f6",
+            <select
+              id="research-document"
+              value={selectedDocument}
+              onChange={(event) => {
+                setSelectedDocument(event.target.value);
+                setResearchHistory([]);
+                setSelectedResearchChatId("");
+                setAnswer("");
+                setUsedDocuments([]);
+                setSourcePages([]);
+                setMessage("");
               }}
+              disabled={researching}
             >
-              <strong>
-                {item.role === "user" ? "You" : "⚖ LegalGenie"}
-              </strong>
+              <option value="">-- Choose a PDF --</option>
 
-              <p
-                style={{
-                  whiteSpace: "pre-wrap",
-                  lineHeight: 1.7,
-                  marginBottom: 0,
-                }}
-              >
-                {item.text}
+              {documents.map((document) => (
+                <option key={document.id} value={document.id}>
+                  {document.name}
+                </option>
+              ))}
+            </select>
+
+            {documents.length === 0 && (
+              <p className="muted">
+                Upload a PDF in the Documents page before starting research.
               </p>
+            )}
+
+            <div className="research-answer">
+              <h3>💬 Conversation</h3>
+
+              {researchHistory.length === 0 ? (
+                <p className="muted">
+                  Your questions and answers will appear here.
+                </p>
+              ) : (
+                researchHistory.map((item, index) => (
+                  <div
+                    key={`${index}-${item.role}`}
+                    style={{
+                      marginBottom: "16px",
+                      padding: "12px",
+                      borderRadius: "8px",
+                      background:
+                        item.role === "user" ? "#eef2ff" : "#f3f4f6",
+                    }}
+                  >
+                    <strong>
+                      {item.role === "user" ? "You" : "⚖ LegalGenie"}
+                    </strong>
+
+                    
+                    <p
+                      style={{
+                        whiteSpace: "pre-wrap",
+                        lineHeight: 1.7,
+                        marginBottom: 0,
+                      }}
+                    >
+                      {item.role === "model"
+                        ? item.text.split(/(\[Source: [^\]]+\])/g).map((part, citationIndex) => {
+                            const match = part.match(
+                              /^\[Source: (.+), p\.\s*(\d+)\]$/
+                            );
+
+                            if (!match) return part;
+
+                            const documentName = match[1].trim();
+                            const pageNumber = Number(match[2]);
+
+                            const source = sourcePages.find(
+                              (s) =>
+                                s.documentName === documentName &&
+                                Number(s.pageNumber) === pageNumber
+                            );
+
+                            if (!source) return part;
+
+                            return (
+                              <a
+                                key={`${citationIndex}-${source.documentId}-${pageNumber}`}
+                                href={`http://localhost:5000/api/documents/${source.documentId}/pdf#page=${pageNumber}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  color: "#2563eb",
+                                  textDecoration: "underline",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {part}
+                              </a>
+                            );
+                          })
+                        : item.text}
+                    </p>
+
+                  </div>
+                ))
+              )}
+
+              {researching && <p>LegalGenie is thinking...</p>}
             </div>
-          ))
+
+            <textarea
+              placeholder="Ask about the selected PDF or ask a follow-up question..."
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              disabled={researching}
+            />
+
+            <button
+              className="primary-button"
+              onClick={handleResearch}
+              disabled={
+                researching || !selectedDocument || !question.trim()
+              }
+            >
+              {researching
+                ? "Generating answer..."
+                : "✨ Ask LegalGenie"}
+            </button>
+
+            {/* STEP 3: START A NEW CHAT */}
+            <button
+              className="secondary-button"
+              onClick={() => {
+                setResearchHistory([]);
+                setSelectedResearchChatId("");
+                setQuestion("");
+                setAnswer("");
+                setUsedDocuments([]);
+                setMessage("");
+                setSourcePages([]);
+              }}
+              disabled={researching}
+            >
+              + New Chat
+            </button>
+
+            {message && <p role="status">{message}</p>}
+
+            {usedDocuments.length > 0 && (
+              <div>
+                <h4>Documents considered</h4>
+                <ul>
+                  {usedDocuments.map((name, index) => (
+                    <li key={`${name}-${index}`}>{name}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <p className="muted">
+              AI-generated legal information may be incomplete.
+              Verify important facts and consult a qualified legal professional.
+            </p>
+          </section>
         )}
-
-        {researching && <p>LegalGenie is thinking...</p>}
-      </div>
-
-      <textarea
-        placeholder="Ask about the selected PDF or ask a follow-up question..."
-        value={question}
-        onChange={(event) => setQuestion(event.target.value)}
-        disabled={researching}
-      />
-
-      <button
-        className="primary-button"
-        onClick={handleResearch}
-        disabled={researching || !selectedDocument || !question.trim()}
-      >
-        {researching ? "Generating answer..." : "✨ Ask LegalGenie"}
-      </button>
-
-      <button
-        className="secondary-button"
-        onClick={() => {
-          setResearchHistory([]);
-          setQuestion("");
-          setAnswer("");
-          setUsedDocuments([]);
-          setMessage("");
-        }}
-        disabled={researching}
-      >
-        New Chat
-      </button>
-
-      {message && <p role="status">{message}</p>}
-
-      {usedDocuments.length > 0 && (
-        <div>
-          <h4>Documents considered</h4>
-          <ul>
-            {usedDocuments.map((name, index) => (
-              <li key={`${name}-${index}`}>{name}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <p className="muted">
-        AI-generated legal information may be incomplete.
-        Verify important facts and consult a qualified legal professional.
-      </p>
-    </section>
-  )}
-
-        {/* CASE BRIEF GENERATOR AND SAVED BRIEFS */}
+                {/* CASE BRIEF GENERATOR AND SAVED BRIEFS */}
         {page === "cases" && (
           <section className="page-panel">
             <h2>AI Case Brief Generator</h2>
+
             <p>
               Select an uploaded legal judgment PDF to generate a structured
               case brief using Gemini AI.
@@ -955,7 +1147,7 @@ function App() {
 
             <hr />
 
-            {/* SAVED BRIEFS */}
+            {/* SAVED CASE BRIEFS */}
             <div className="section-heading">
               <div>
                 <h2>Saved Case Briefs</h2>
@@ -1029,6 +1221,7 @@ function App() {
             {selectedSavedBrief && (
               <div className="research-answer">
                 <h3>📚 Opened Saved Brief</h3>
+
                 <p>
                   <strong>{selectedSavedBrief.documentName}</strong>
                 </p>

@@ -284,9 +284,9 @@ router.post("/brief/:id", async (req, res) => {
     }
 
     
-    const document = await Document.findById(documentId).select(
+    const document = await Document.findById(id).select(
   "originalName fileName filePath extractedText pages"
-  );
+);
 
     if (!document) {
       return res.status(404).json({

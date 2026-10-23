@@ -20,8 +20,34 @@ import "./App.css";
 // const API_URL = "http://localhost:5000/api";
 // const API_URL = import.meta.env.VITE_API_URL;
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const apiFetch = (url, options = {}) => {
+  const savedToken = localStorage.getItem("legalgenie_token");
+  const headers = new Headers(options.headers || {});
+
+  if (savedToken) {
+    headers.set("Authorization", `Bearer ${savedToken}`);
+  }
+
+  return fetch(url, {
+    ...options,
+    headers,
+  });
+};
+
 
 function App() {
+  const [token, setToken] = useState(
+    localStorage.getItem("legalgenie_token") || ""
+  );
+
+  const [authMode, setAuthMode] = useState("login");
+  const [authName, setAuthName] = useState("");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState("");
+
+  // Migatha existing useState and code ikkada alane undali
   const [question, setQuestion] = useState("");
   const [page, setPage] = useState("dashboard");
   const [documents, setDocuments] = useState([]);
@@ -50,7 +76,7 @@ function App() {
   // LOAD DOCUMENTS
   const loadDocuments = async () => {
     try {
-      const response = await fetch(`${API_URL}/documents`);
+      const response = await apiFetch(`${API_URL}/documents`);
       const result = await response.json();
 
       if (!response.ok) {
@@ -77,7 +103,7 @@ function App() {
     setLoadingResearchHistory(true);
 
     try {
-      const response = await fetch(`${API_URL}/research/history`);
+      const response = await apiFetch(`${API_URL}/research/history`);
       const result = await response.json();
 
       if (!response.ok) {
@@ -116,7 +142,7 @@ function App() {
 
       const isUpdating = Boolean(chatId);
 
-      const response = await fetch(
+      const response = await apiFetch(
         isUpdating
           ? `${API_URL}/research/history/${chatId}`
           : `${API_URL}/research/history`,
@@ -148,7 +174,7 @@ function App() {
   // OPEN SAVED RESEARCH CHAT
   const handleOpenResearchChat = async (chatId) => {
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_URL}/research/history/${chatId}`
       );
       const result = await response.json();
@@ -182,7 +208,7 @@ function App() {
     setLoadingBriefs(true);
 
     try {
-      const response = await fetch(`${API_URL}/case-briefs`);
+      const response = await apiFetch(`${API_URL}/case-briefs`);
       const result = await response.json();
 
       if (!response.ok) {
@@ -247,7 +273,7 @@ function App() {
         formData.append("document", file);
 
         try {
-          const response = await fetch(
+          const response = await apiFetch(
             `${API_URL}/documents/upload`,
             {
               method: "POST",
@@ -294,7 +320,7 @@ function App() {
     setMessage("");
 
     try {
-      const response = await fetch(`${API_URL}/documents/${id}`, {
+      const response = await apiFetch(`${API_URL}/documents/${id}`, {
         method: "DELETE",
       });
 
@@ -349,7 +375,7 @@ function App() {
     ]);
 
     try {
-      const response = await fetch(`${API_URL}/research`, {
+      const response = await apiFetch(`${API_URL}/research`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -413,7 +439,7 @@ function App() {
     setSelectedSavedBrief(null);
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_URL}/research/brief/${selectedDocument}`,
         {
           method: "POST",
@@ -469,7 +495,7 @@ function App() {
         selectedSavedBrief?.documentName ||
         "Case Brief";
 
-      const response = await fetch(`${API_URL}/case-briefs`, {
+      const response = await apiFetch(`${API_URL}/case-briefs`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -505,7 +531,7 @@ function App() {
     setMessage("");
 
     try {
-      const response = await fetch(`${API_URL}/case-briefs/${id}`);
+      const response = await apiFetch(`${API_URL}/case-briefs/${id}`);
       const result = await response.json();
 
       if (!response.ok) {
@@ -539,7 +565,7 @@ function App() {
     setMessage("");
 
     try {
-      const response = await fetch(`${API_URL}/case-briefs/${id}`, {
+      const response = await apiFetch(`${API_URL}/case-briefs/${id}`, {
         method: "DELETE",
       });
 
@@ -621,9 +647,145 @@ function App() {
       .toLowerCase()
       .includes(briefSearch.toLowerCase().trim())
   );
+const handleAuth = async (event) => {
+  event.preventDefault();
+  setAuthLoading(true);
+  setAuthError("");
 
+  try {
+    const endpoint =
+      authMode === "register" ? "/auth/register" : "/auth/login";
+
+    const payload =
+      authMode === "register"
+        ? {
+            name: authName.trim(),
+            email: authEmail.trim(),
+            password: authPassword,
+          }
+        : {
+            email: authEmail.trim(),
+            password: authPassword,
+          };
+
+    const response = await apiFetch(`${API_URL}${endpoint}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || "Authentication failed.");
+    }
+
+    if (authMode === "register") {
+      setAuthMode("login");
+      setAuthPassword("");
+      setAuthError("Registration successful! Please log in.");
+      return;
+    }
+
+    if (!result.token) {
+      throw new Error("Login token was not returned by the server.");
+    }
+
+    localStorage.setItem("legalgenie_token", result.token);
+    setToken(result.token);
+    setAuthPassword("");
+    setMessage("Logged in successfully!");
+  } catch (error) {
+    setAuthError(error.message || "Something went wrong.");
+  } finally {
+    setAuthLoading(false);
+  }
+};
+
+const handleLogout = () => {
+  localStorage.removeItem("legalgenie_token");
+  setToken("");
+  setDocuments([]);
+  setSavedCaseBriefs([]);
+  setSavedResearchChats([]);
+  setResearchHistory([]);
+  setSelectedDocument("");
+  setSelectedResearchChatId("");
+  setSelectedSavedBrief(null);
+  setCaseBrief("");
+  setAnswer("");
+  setQuestion("");
+  setPage("dashboard");
+  setMessage("");
+  setAuthError("");
+};
   // USER INTERFACE
+  if (!token) {
   return (
+    <div className="auth-container">
+      <form className="auth-form" onSubmit={handleAuth}>
+        <h1>⚖ LegalGenie</h1>
+        <h2>{authMode === "login" ? "Welcome Back" : "Create Account"}</h2>
+
+        {authMode === "register" && (
+          <input
+            type="text"
+            placeholder="Full Name"
+            value={authName}
+            onChange={(e) => setAuthName(e.target.value)}
+            required
+          />
+        )}
+
+        <input
+          type="email"
+          placeholder="Email Address"
+          value={authEmail}
+          onChange={(e) => setAuthEmail(e.target.value)}
+          required
+        />
+
+        <input
+          type="password"
+          placeholder="Password (minimum 8 characters)"
+          value={authPassword}
+          onChange={(e) => setAuthPassword(e.target.value)}
+          minLength={8}
+          required
+        />
+
+        {authError && <p role="alert">{authError}</p>}
+
+        <button type="submit" disabled={authLoading}>
+          {authLoading
+            ? "Please wait..."
+            : authMode === "login"
+              ? "Login"
+              : "Register"}
+        </button>
+
+        <p>
+          {authMode === "login"
+            ? "Don't have an account?"
+            : "Already have an account?"}{" "}
+          <button
+            type="button"
+            onClick={() => {
+              setAuthMode(authMode === "login" ? "register" : "login");
+              setAuthError("");
+            }}
+          >
+            {authMode === "login" ? "Register" : "Login"}
+          </button>
+        </p>
+      </form>
+    </div>
+  );
+}
+  return (
+    
     <div className="app">
       <aside className={`sidebar ${mobileMenuOpen ? "mobile-open" : ""}`}>
         <button
@@ -681,8 +843,16 @@ function App() {
 
             <p>Your AI-powered legal research workspace</p>
           </div>
-
-          <span className="status">AI Assistant</span>
+<div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+  <span className="status">AI Assistant</span>
+  <button
+    type="button"
+    className="secondary-button"
+    onClick={handleLogout}
+  >
+    Logout
+  </button>
+</div>
         </header>
 
         {/* RESEARCH HISTORY */}
@@ -1008,7 +1178,28 @@ function App() {
         return (
           <a
             key={`${citationIndex}-${documentId}-${pageNumber}`}
-            href={`${API_URL}/documents/${documentId}/pdf#page=${pageNumber}`}
+            // href={`${API_URL}/documents/${documentId}/pdf#page=${pageNumber}`}
+            onClick={async (event) => {
+  event.preventDefault();
+
+  try {
+    const response = await apiFetch(
+      `${API_URL}/documents/${documentId}/pdf`
+    );
+
+    if (!response.ok) {
+      throw new Error("Could not open PDF. Please log in again.");
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(`${url}#page=${pageNumber}`, "_blank");
+  } catch (error) {
+    setMessage(error.message);
+  }
+}}
+style={{cursor: "pointer" }}
+>
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -1017,7 +1208,7 @@ function App() {
               cursor: "pointer",
             }}
             title={`Open PDF at page ${pageNumber}`}
-          >
+          
             {part}
           </a>
         );
@@ -1050,23 +1241,39 @@ function App() {
                                   </span>
                                 );
                               }
+                          return (
+  <a
+    key={`${citationIndex}-${source.documentId}-${pageNumber}`}
+    onClick={async (event) => {
+      event.preventDefault();
 
-                            return (
-                              <a
-                                key={`${citationIndex}-${source.documentId}-${pageNumber}`}
-                                href={`${API_URL}/documents/${source.documentId}/pdf#page=${pageNumber}`}
-                                
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                  color: "#2563eb",
-                                  textDecoration: "underline",
-                                  cursor: "pointer",
-                                }}
-                              >
-                                {part}
-                              </a>
-                            );
+      try {
+        const response = await apiFetch(
+          `${API_URL}/documents/${source.documentId}/pdf`
+        );
+
+        if (!response.ok) {
+          throw new Error("Could not open PDF. Please log in again.");
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        window.open(`${url}#page=${pageNumber}`, "_blank");
+      } catch (error) {
+        setMessage(error.message);
+      }
+    }}
+    style={{
+      color: "#2563eb",
+      textDecoration: "underline",
+      cursor: "pointer",
+    }}
+    title={`Open PDF at page ${pageNumber}`}
+  >
+    {part}
+  </a>
+);
+                            
                           })
                         : item.text}
                     </p>

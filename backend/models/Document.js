@@ -1,6 +1,16 @@
+
 const mongoose = require("mongoose");
+
 const documentSchema = new mongoose.Schema(
   {
+    // Store the user who owns this document
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: false,
+      index: true,
+    },
+
     originalName: {
       type: String,
       required: true,
@@ -21,13 +31,13 @@ const documentSchema = new mongoose.Schema(
       required: true,
     },
 
-    // Existing field: keep it for backward compatibility
+    // Store the complete extracted text
     extractedText: {
       type: String,
       default: "",
     },
 
-    // New field: store extracted text page by page
+    // Store extracted text page by page
     pages: [
       {
         pageNumber: {

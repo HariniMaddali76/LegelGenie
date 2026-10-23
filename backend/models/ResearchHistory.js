@@ -18,20 +18,31 @@ const messageSchema = new mongoose.Schema(
 
 const researchHistorySchema = new mongoose.Schema(
   {
+    // Store the user who owns this research conversation
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: false,
+      index: true,
+    },
+
     title: {
       type: String,
       default: "New Research Chat",
       trim: true,
     },
+
     documentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Document",
       default: null,
     },
+
     documentName: {
       type: String,
       default: "",
     },
+
     messages: {
       type: [messageSchema],
       default: [],

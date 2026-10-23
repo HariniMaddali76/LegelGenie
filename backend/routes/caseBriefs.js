@@ -1,23 +1,21 @@
-
 const express = require("express");
 const mongoose = require("mongoose");
 const CaseBrief = require("../models/CaseBrief");
+const authMiddleware = require("../middleware/auth");
 
 const router = express.Router();
 
-// ==========================================
-// 1. SAVE A CASE BRIEF
-// POST /api/case-briefs
-// ==========================================
+// Require login for every case-brief route
+router.use(authMiddleware);
+
+// 1. SAVE CASE BRIEF
 router.post("/", async (req, res) => {
   try {
     const { documentId, documentName, brief } = req.body;
 
     if (
-      !documentName ||
       typeof documentName !== "string" ||
       !documentName.trim() ||
-      !brief ||
       typeof brief !== "string" ||
       !brief.trim()
     ) {
@@ -38,6 +36,7 @@ router.post("/", async (req, res) => {
     }
 
     const savedBrief = await CaseBrief.create({
+      userId: req.userId,
       documentId: documentId || null,
       documentName: documentName.trim(),
       brief: brief.trim(),
@@ -50,7 +49,6 @@ router.post("/", async (req, res) => {
     });
   } catch (error) {
     console.error("Save case brief error:", error.message);
-
     return res.status(500).json({
       success: false,
       message: "Could not save the case brief.",
@@ -58,23 +56,18 @@ router.post("/", async (req, res) => {
   }
 });
 
-// ==========================================
-// 2. GET ALL SAVED CASE BRIEFS
-// GET /api/case-briefs
-// ==========================================
+// 2. GET ONLY THE LOGGED-IN USER'S CASE BRIEFS
 router.get("/", async (req, res) => {
   try {
-    const caseBriefs = await CaseBrief.find()
+    const caseBriefs = await CaseBrief.find({
+      userId: req.userId,
+    })
       .sort({ createdAt: -1 })
       .lean();
 
-    return res.json({
-      success: true,
-      caseBriefs,
-    });
+    return res.json({ success: true, caseBriefs });
   } catch (error) {
     console.error("Fetch case briefs error:", error.message);
-
     return res.status(500).json({
       success: false,
       message: "Could not fetch saved case briefs.",
@@ -82,10 +75,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ==========================================
-// 3. GET ONE SAVED CASE BRIEF
-// GET /api/case-briefs/:id
-// ==========================================
+// 3. GET ONE CASE BRIEF OWNED BY THE LOGGED-IN USER
 router.get("/:id", async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
@@ -95,7 +85,10 @@ router.get("/:id", async (req, res) => {
       });
     }
 
-    const caseBrief = await CaseBrief.findById(req.params.id);
+    const caseBrief = await CaseBrief.findOne({
+      _id: req.params.id,
+      userId: req.userId,
+    });
 
     if (!caseBrief) {
       return res.status(404).json({
@@ -104,13 +97,9 @@ router.get("/:id", async (req, res) => {
       });
     }
 
-    return res.json({
-      success: true,
-      caseBrief,
-    });
+    return res.json({ success: true, caseBrief });
   } catch (error) {
     console.error("Fetch single case brief error:", error.message);
-
     return res.status(500).json({
       success: false,
       message: "Could not fetch the case brief.",
@@ -118,10 +107,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// ==========================================
-// 4. DELETE A SAVED CASE BRIEF
-// DELETE /api/case-briefs/:id
-// ==========================================
+// 4. DELETE ONLY A CASE BRIEF OWNED BY THE LOGGED-IN USER
 router.delete("/:id", async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
@@ -131,9 +117,10 @@ router.delete("/:id", async (req, res) => {
       });
     }
 
-    const deletedBrief = await CaseBrief.findByIdAndDelete(
-      req.params.id
-    );
+    const deletedBrief = await CaseBrief.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.userId,
+    });
 
     if (!deletedBrief) {
       return res.status(404).json({
@@ -148,7 +135,6 @@ router.delete("/:id", async (req, res) => {
     });
   } catch (error) {
     console.error("Delete case brief error:", error.message);
-
     return res.status(500).json({
       success: false,
       message: "Could not delete the case brief.",

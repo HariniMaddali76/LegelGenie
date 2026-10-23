@@ -1,15 +1,12 @@
-
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
 require("dotenv").config();
-
+const authRoutes = require("./routes/auth");
 const connectDB = require("./config/db");
-
 const documentRoutes = require("./routes/documents");
 const researchRoutes = require("./routes/research");
 const caseBriefRoutes = require("./routes/caseBriefs");
-
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -27,7 +24,7 @@ app.use(
 app.use("/api/documents", documentRoutes);
 app.use("/api/research", researchRoutes);
 app.use("/api/case-briefs", caseBriefRoutes);
-
+app.use("/api/auth", authRoutes);
 // Welcome route
 app.get("/", (req, res) => {
   res.json({

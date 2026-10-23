@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import {
+  Menu,
+  X,
   Scale,
   LayoutDashboard,
   Search,
@@ -42,7 +44,7 @@ function App() {
   const [savedResearchChats, setSavedResearchChats] = useState([]);
   const [selectedResearchChatId, setSelectedResearchChatId] = useState("");
   const [loadingResearchHistory, setLoadingResearchHistory] = useState(false);
-  
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // LOAD DOCUMENTS
   const loadDocuments = async () => {
     try {
@@ -621,14 +623,23 @@ function App() {
   // USER INTERFACE
   return (
     <div className="app">
-      <aside className="sidebar">
+      <aside className={`sidebar ${mobileMenuOpen ? "mobile-open" : ""}`}>
+        <button
+  type="button"
+  className="mobile-menu-toggle"
+  onClick={() => setMobileMenuOpen((open) => !open)}
+  aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+  aria-expanded={mobileMenuOpen}
+>
+  {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+</button>
         <h2 className="brand">
           <span className="brand-icon">
             <Scale size={21} />
           </span>
           LegalGenie
         </h2>
-
+        
         <p className="tagline">AI Legal Research Assistant</p>
 
         <nav>

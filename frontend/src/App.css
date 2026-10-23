@@ -876,3 +876,109 @@ select:focus {
 .research-answer {
   border: 1px solid #A98549;
 }
+
+.mobile-menu-toggle {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .app {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .sidebar {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    min-height: auto;
+    padding: 14px 16px;
+    gap: 14px;
+  }
+
+  .mobile-menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-end;
+    width: 42px;
+    height: 42px;
+    border: 1px solid #536176;
+    border-radius: 10px;
+    background: #203d5c;
+    color: #fffaf0;
+    cursor: pointer;
+  }
+
+  .sidebar nav {
+    display: none;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .sidebar.mobile-open nav {
+    display: flex;
+  }
+
+  .sidebar .nav-link {
+    width: 100%;
+    min-height: 44px;
+    font-size: 14px;
+  }
+
+  .main-content {
+    width: 100%;
+    min-width: 0;
+    padding: 14px;
+  }
+
+  .topbar {
+    padding: 17px;
+    gap: 12px;
+  }
+
+  .topbar h1 {
+    font-size: 24px;
+    overflow-wrap: anywhere;
+  }
+
+  .hero {
+    padding: 25px 18px;
+  }
+
+  .stats {
+    grid-template-columns: 1fr;
+  }
+
+  .research,
+  .page-panel {
+    min-width: 0;
+    padding: 16px;
+  }
+
+  .document-row {
+    flex-wrap: wrap;
+  }
+
+  .document-info {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .research-answer {
+    padding: 14px;
+    overflow-wrap: anywhere;
+  }
+
+  .section-heading {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  textarea,
+  input,
+  select {
+    max-width: 100%;
+    font-size: 16px;
+  }
+}

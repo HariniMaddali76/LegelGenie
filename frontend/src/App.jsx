@@ -18,7 +18,8 @@ import {
 import "./App.css";
 
 // const API_URL = "http://localhost:5000/api";
-const API_URL = import.meta.env.VITE_API_URL;
+// const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 function App() {
   const [question, setQuestion] = useState("");
@@ -968,6 +969,61 @@ function App() {
                             const match = part.match(
                               /^\[Source: (.+), p\.\s*(\d+)\]$/
                             );
+                            {item.role === "model"
+  ? item.text
+      .split(/(\[Source: [^\]]+\])/g)
+      .map((part, citationIndex) => {
+        const match = part.match(
+  /^\[Source:\s*(.+?),\s*(?:p\.|page)\s*(\d+)\s*\]$/i
+);
+        if (!match) return part;
+
+        const documentName = match[1].trim();
+        const pageNumber = Number(match[2]);
+
+        const normalizeName = (name) =>
+          (name || "")
+            .trim()
+            .replace(/\\/g, "/")
+            .split("/")
+            .pop()
+            .toLowerCase();
+
+        const source = sourcePages.find(
+          (s) =>
+            normalizeName(s.documentName) ===
+              normalizeName(documentName) &&
+            Number(s.pageNumber) === pageNumber
+        );
+
+        // Use the matching source ID, or the currently selected PDF.
+        const documentId = source?.documentId || selectedDocument;
+
+        if (!documentId || !Number.isInteger(pageNumber) || pageNumber < 1) {
+          return (
+            <span key={`${citationIndex}-${part}`}>{part}</span>
+          );
+        }
+
+        return (
+          <a
+            key={`${citationIndex}-${documentId}-${pageNumber}`}
+            href={`${API_URL}/documents/${documentId}/pdf#page=${pageNumber}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              color: "#2563eb",
+              textDecoration: "underline",
+              cursor: "pointer",
+            }}
+            title={`Open PDF at page ${pageNumber}`}
+          >
+            {part}
+          </a>
+        );
+      })
+  : item.text}
+                            
 
                             if (!match) return part;
 
@@ -980,12 +1036,26 @@ function App() {
                                 Number(s.pageNumber) === pageNumber
                             );
 
-                            if (!source) return part;
+                            if (!source) {
+                                return (
+                                  <span
+                                    key={`${citationIndex}-${part}`}
+                                    style={{
+                                      color: "#2563eb",
+                                      textDecoration: "underline",
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    {part}
+                                  </span>
+                                );
+                              }
 
                             return (
                               <a
                                 key={`${citationIndex}-${source.documentId}-${pageNumber}`}
-                                href={`http://localhost:5000/api/documents/${source.documentId}/pdf#page=${pageNumber}`}
+                                href={`${API_URL}/documents/${source.documentId}/pdf#page=${pageNumber}`}
+                                
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 style={{
